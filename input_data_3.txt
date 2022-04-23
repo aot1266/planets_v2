@@ -1,0 +1,27 @@
+{
+	"00":{
+	"object_list": [
+		{
+		"pos":[-200.0, -60.0], 
+		"vel":[0.0, 0.0], 
+		"mass":10.0, 
+		"geom":"test"
+		}
+		],
+	"planet_list": [
+		{
+		"pos":"test", 
+		"vel":"test", 
+		"mass":"test", 
+		"geom":"test", 
+		"planet_obj_list":["test"]
+		}
+		],
+	"stars_list": [
+		{
+		"starfield":"test"
+		
+		}
+		]
+    }
+}
