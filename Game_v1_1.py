@@ -4,7 +4,7 @@ import pandas as pd
 import pygame as pg
 import random as rn 
 from core_fns import absval, cart2pol, pol2cart, vec_comp, orth_vec, line_intersection, intersection, angle_between
-from planet_objs import obj_planet, on_planet_obj
+from planet_objs import obj_planet, on_planet_obj, on_planet_water
 from moveable_objs import obj_moveable, NPC, player
 import copy 
 import os 
@@ -108,70 +108,78 @@ class game:
         for room_obj in room['room_obj_list']:
             #create object 
             room_obj_list.append(on_planet_obj(room_obj['cart_pos'], room_obj['height'], room_obj['state'], room_obj['obj_type']))
+        room_water_list = []
         print(room_planet)
         print(type(room_planet))
-        room_planet_obj = obj_planet(room_planet.pos, room_planet.vel, room_planet.mass, geom, room_obj_list, room['planet_linked_list'], 0)
+        room_planet_obj = obj_planet(room_planet.pos, room_planet.vel, room_planet.mass, geom, room_obj_list, room_water_list, room['planet_linked_list'], 0)
         return room_planet_obj
 
     def load_sector(self, coords): 
         if list(coords) not in self.sector_load_list:
-            try:
-                print('test2 ')
-                new_data = self.all_sectors_data[coords[0]][coords[1]]
-                print('new data test2 ',new_data)
-                #add planets
-                new_planet_list = []
-                for planet_ind, planet in enumerate(new_data['planet_list']):
-                    #get geom 
-                    geom = []
-                    for g_point in planet['geom']:
-                        geom.append([g_point['p1'],g_point['p2'],g_point['type'],g_point['mu']])
-                    #planet objects
-                    planet_obj_list = []
-                    for planet_obj in planet['planet_obj_list']:
-                        #create object 
-                        if planet_obj['obj_type'] == 'room':
-                            room_obj = on_planet_obj(planet_obj['cart_pos'], planet_obj['height'], planet_obj['state'], planet_obj['obj_type'])
-                            room_obj.room_index = planet_obj['room_index']
-                            planet_obj_list.append(room_obj)
-                        else:
-                            planet_obj_list.append(on_planet_obj(planet_obj['cart_pos'], planet_obj['height'], planet_obj['state'], planet_obj['obj_type']))
-                        
-                    new_planet_list.append(obj_planet(np.array(planet['pos']), np.array(planet['vel']), planet['mass'], geom, planet_obj_list, planet['planet_linked_list'], planet['grav_flag']))
-                    try:
-                        print('test',planet['img'])
-                        print('os',os.getcwd())
-                        planet_img = pg.image.load(planet['img'])
-                        planet_img.set_colorkey((255, 255, 255))
-                        new_planet_list[planet_ind].planet_img = planet_img
-                        print('y')
-                        print('planet_img ',type(planet_img))
-                        print('t')
-                    except:
-                        print('1')
-                #linked planets 
-                print('new planet list ',new_planet_list)
-                for planet in new_planet_list:
-                    planet.planet_linked_list = [new_planet_list[i] for i in planet.planet_linked_list]
-                self.planet_list += new_planet_list
-                #self.sector_planets[coords] = new_planet_list
-                #load single sector room lists
-                self.sector_room_list = new_data['rooms']
-                
-                #add objects 
-                new_obj_list = []
-                for obj in new_data['object_list']:
-                    new_obj_list.append(obj_moveable(obj['pos'], obj['vel'], obj['mass'], obj['geom']))
-                self.object_list += new_obj_list
-                #add to load list 
-                self.sector_load_list.append(list(coords))
-                #remove data from json 
-                self.all_sectors_data[coords[0]][coords[1]] = {"object_list":[], "planet_list":[],"starfield":[]}
-                #add stars
-                #for stars_ind, stars in enumerate(new_data['starfield']):
-                #    self.stars_list[stars_ind].append(stars)
-            except:
-                pass
+            #try:
+            print('test2 ')
+            new_data = self.all_sectors_data[coords[0]][coords[1]]
+            print('new data test2 ',new_data)
+            #add planets
+            new_planet_list = []
+            for planet_ind, planet in enumerate(new_data['planet_list']):
+                #get geom 
+                geom = []
+                for g_point in planet['geom']:
+                    geom.append([g_point['p1'],g_point['p2'],g_point['type'],g_point['mu']])
+                #planet objects
+                planet_obj_list = []
+                planet_water_list = []
+                for planet_obj in planet['planet_obj_list']:
+                    #create object 
+                    if planet_obj['obj_type'] == 'room':
+                        room_obj = on_planet_obj(planet_obj['cart_pos'], planet_obj['height'], planet_obj['state'], planet_obj['obj_type'])
+                        room_obj.room_index = planet_obj['room_index']
+                        try:
+                            planet_obj_img = pg.image.load(planet_obj['img'])
+                            planet_obj_img = pg.transform.rotate(planet_obj_img, planet_obj['cart_pos'][1])
+                            room_obj.img = planet_obj_img
+                        except:
+                            pass
+                        planet_obj_list.append(room_obj)
+                    elif planet_obj['obj_type'] == 'water':
+                        print('test 1')
+                        water_obj = on_planet_water(planet_obj['arc_start'], planet_obj['arc'], planet_obj['rad'], np.array(planet['pos']))
+                        planet_water_list.append(water_obj)
+                    else:
+                        planet_obj_list.append(on_planet_obj(planet_obj['cart_pos'], planet_obj['height'], planet_obj['state'], planet_obj['obj_type']))
+                new_planet_list.append(obj_planet(np.array(planet['pos']), np.array(planet['vel']), planet['mass'], geom, planet_obj_list, planet_water_list, planet['planet_linked_list'], planet['grav_flag']))
+                try:
+                    print('test',planet['img'])
+                    print('os',os.getcwd())
+                    planet_img = pg.image.load(planet['img'])
+                    planet_img.set_colorkey((255, 255, 255))
+                    new_planet_list[planet_ind].planet_img = planet_img
+                except:
+                    print('1')
+            #linked planets 
+            print('new planet list ',new_planet_list)
+            for planet in new_planet_list:
+                planet.planet_linked_list = [new_planet_list[i] for i in planet.planet_linked_list]
+            self.planet_list += new_planet_list
+            #self.sector_planets[coords] = new_planet_list
+            #load single sector room lists
+            self.sector_room_list = new_data['rooms']
+            
+            #add objects 
+            new_obj_list = []
+            for obj in new_data['object_list']:
+                new_obj_list.append(obj_moveable(obj['pos'], obj['vel'], obj['mass'], obj['geom']))
+            self.object_list += new_obj_list
+            #add to load list 
+            self.sector_load_list.append(list(coords))
+            #remove data from json 
+            self.all_sectors_data[coords[0]][coords[1]] = {"object_list":[], "planet_list":[],"starfield":[]}
+            #add stars
+            #for stars_ind, stars in enumerate(new_data['starfield']):
+            #    self.stars_list[stars_ind].append(stars)
+            #except:
+            #    pass
             print(self.planet_list)
             for planet in new_planet_list:
                 print(planet, '------',planet.planet_linked_list)
@@ -228,6 +236,8 @@ class game:
                 del planet 
             
     def draw_planet(self, planet):
+        #draw the atmosphere 
+        #pg.draw.circle(self.screen,(200, 200, 250,10),planet.screen_pos*self.window_scale_val,500)
         planet.screen_pos = ((planet.pos - self.window_pos)*self.window_scale_val) + np.array([self.window_x_size/2,self.window_y_size/2])
         #draw the image associated with the planet 
         try:
@@ -242,18 +252,34 @@ class game:
         pg.draw.circle(self.screen,(255, 0, 0),planet.screen_pos,5)
         #draw the planet objects as circles
         for planet_obj in planet.planet_obj_list:
-            print(planet_obj.state)
+            #print(planet_obj.state)
             if planet_obj.obj_type == 'ladder':
                 pg.draw.line(self.screen, (233, 255, 0), planet.screen_pos + np.array(pol2cart(planet_obj.rel_pos[0],planet_obj.rel_pos[1]))*self.window_scale_val,planet.screen_pos + np.array(pol2cart(planet_obj.height + planet_obj.rel_pos[0],planet_obj.rel_pos[1]))*self.window_scale_val,2)
             elif planet_obj.obj_type == 'room':
-                print('test val ',pol2cart(planet_obj.rel_pos[0],planet_obj.rel_pos[1]),type(pol2cart(planet_obj.rel_pos[0],planet_obj.rel_pos[1])))
+                #print('test val ',pol2cart(planet_obj.rel_pos[0],planet_obj.rel_pos[1]),type(pol2cart(planet_obj.rel_pos[0],planet_obj.rel_pos[1])))
                 pg.draw.circle(self.screen, (50 + 100*self.player.inside_flag,0, 0), (planet.screen_pos + np.array(pol2cart(planet_obj.rel_pos[0],planet_obj.rel_pos[1]))*self.window_scale_val), 30)
                 if self.player.inside_flag == 1:
                     if planet_obj == self.player.inside_room:
-                        pg.draw.circle(self.screen, (50 + 100*self.player.inside_flag,0, 0), (planet.screen_pos + np.array(pol2cart(planet_obj.rel_pos[0],planet_obj.rel_pos[1]))*self.window_scale_val), 60)
-                        
+                        pg.draw.circle(self.screen, (50 + 100*self.player.inside_flag,0, 0), (planet.screen_pos + np.array(pol2cart(planet_obj.rel_pos[0],planet_obj.rel_pos[1]))*self.window_scale_val), 60)      
             else:
                 pg.draw.circle(self.screen, (50 + 100*planet_obj.state,0, 0), (planet.screen_pos + np.array(pol2cart(planet_obj.rel_pos[0],planet_obj.rel_pos[1])*self.window_scale_val)), 30)
+            #draw planet img 
+            if planet_obj.img != None:
+                self.screen.blit(planet_obj.img, (planet.screen_pos + np.array(pol2cart(planet_obj.rel_pos[0],planet_obj.rel_pos[1]))*self.window_scale_val))    
+            
+        #draw water step
+        for water_obj in planet.water_obj_list:
+            print('rel points ',water_obj.rel_points)
+            water_obj_points_set = [planet.screen_pos]
+            for water_point_ind, water_point in enumerate(water_obj.rel_points):
+                water_obj_points_set.append(planet.screen_pos + np.array(pol2cart(water_point[0],water_point[1]))*self.window_scale_val)
+                #if water_point_ind < len(water_obj.rel_points) - 1:
+                    #water_point_2 = water_obj.rel_points[water_point_ind + 1]
+                    #pg.draw.line(self.screen, (0, 0, 220), planet.screen_pos + np.array(pol2cart(water_point[0],water_point[1]))*self.window_scale_val,planet.screen_pos + np.array(pol2cart(water_point_2[0],water_point_2[1]))*self.window_scale_val,2)
+                #print('ww',water_point)
+                #pg.draw.circle(self.screen, (0,0, 220), (planet.screen_pos + np.array(pol2cart(water_point[0],water_point[1]))*self.window_scale_val), 3)
+            pg.draw.polygon(self.screen, pg.Color(0,0, 220,90), water_obj_points_set, width=0)
+            #pg.draw.polygon(self.water_surface, pg.Color(0,0, 220,90), water_obj_points_set, width=0)
 
         #draw the planet itself ----------------
         #print('positions planet',planet.screen_pos)
@@ -338,7 +364,7 @@ class game:
             vert_point_list = []
             normal_force = np.zeros(2)
             for geom_point in planet.geom:
-                print(11111111111111111111111,abs(obj_dist_pol[1]),geom_point)
+                #print(11111111111111111111111,abs(obj_dist_pol[1]),geom_point)
                 if ((geom_point[0][1] < abs(obj_dist_pol[1]) <= geom_point[1][1])
                 or (geom_point[0][1] >= abs(obj_dist_pol[1]) > geom_point[1][1])):
                     point_list.append(geom_point)
@@ -352,7 +378,7 @@ class game:
             for point in point_list:
                 if point[2] == 'arc':
                     rad = point[0][0]
-                    print('rad ',rad)
+                    #print('rad ',rad)
                     rad_list.append(rad)
                     intersect_point_list.append(None)
                 if point[2] == 'line':
@@ -365,14 +391,14 @@ class game:
                     intersect_point_list.append(intersect_point_list)
                     rad = absval(intersect_point)
                     rad_list.append(rad)
-            print('intersect_point_list ',intersect_point_list, point_list, 'vert list ',vert_point_list)
-            print('rad list ',rad_list)
+            #print('intersect_point_list ',intersect_point_list, point_list, 'vert list ',vert_point_list)
+            #print('rad list ',rad_list)
             #if len(rad_list) > 1:
-            #    print(t)
+                # print(t)
             if rad_list != []:
                 min_rad = min(rad_list)
                 max_rad = max(rad_list)
-                print('min rad ',min_rad, max_rad,abs(obj_dist_pol[0]))
+                #print('min rad ',min_rad, max_rad,abs(obj_dist_pol[0]))
                 other_rad_list = [rad for rad in rad_list if rad != max_rad]
                 if other_rad_list != []:
                     other_rad = max(other_rad_list)
@@ -397,7 +423,7 @@ class game:
                     obj.contact_flag_obj = planet
                     
                     #if radius significantly smaller adjust 
-                    if 0.99*abs(rad) > abs(obj_dist_pol[0]) and point not in vert_point_list:
+                    if 0.998*abs(rad) > abs(obj_dist_pol[0]) and point not in vert_point_list:
                         #this if statement may need removing and fn retaining
                         #if point[2] == 'line' or rad == min([other_point[0] for other_point in point_list if other_point[2] != 'line']):
                         obj.pos -= obj_dist_vec*((rad - obj_dist_pol[0])/rad)
@@ -406,19 +432,20 @@ class game:
                     obj.m_speed = (1-point[3])*obj.m_speed    
                     if abs(obj.m_speed) < 0.01:
                         obj.m_speed = 0.0
-                    obj.m_force += obj.m_speed*(self.orth_vec(obj.down))
+                    #obj.m_force += obj.m_speed*(self.orth_vec(obj.down))
  
                     #get the normal force of total force 
                     if point[2] == 'arc':
+                        obj.m_force += obj.m_speed*(self.orth_vec(obj.down))
                         #add the m force to the total force 
                         obj.force += obj.m_force
                         #obj.force += planet.force
                         #obj_dist_vec += planet.force
                         
-                        print('planet pos ',planet.pos)
-                        print('obj dist vec ',obj_dist_vec)
-                        print('obj force ',obj.force, obj.g_force, planet.force, obj.vel, obj.m_force)
-                        print('normal ',-1*vec_comp(obj.force, obj_dist_vec/absval(obj_dist_vec))*(obj_dist_vec/absval(obj_dist_vec)))
+                        # print('planet pos ',planet.pos)
+                        # print('obj dist vec ',obj_dist_vec)
+                        # print('obj force ',obj.force, obj.g_force, planet.force, obj.vel, obj.m_force)
+                        # print('normal ',-1*vec_comp(obj.force, obj_dist_vec/absval(obj_dist_vec))*(obj_dist_vec/absval(obj_dist_vec)))
                         
                         if np.sign(obj.force[0]) == np.sign(obj_dist_vec[0]) or np.sign(obj.force[1]) == np.sign(obj_dist_vec[1]):
                             normal_force += -1*vec_comp(obj.force, obj_dist_vec/absval(obj_dist_vec))*(obj_dist_vec/absval(obj_dist_vec))
@@ -494,7 +521,7 @@ class game:
                         #add normal force 
                         obj.n_force = normal_force
                         obj.force += planet.force
-                        print('LINE')
+                        #print('LINE')
                     if vert_point_list != []:
                         for vert_point in vert_point_list:
                             #if rad smaller than the point rad
@@ -504,9 +531,8 @@ class game:
                                 next_pos = planet.pos - (obj.pos + obj.m_force)
                                 next_pos = planet.pos - (obj.pos + obj.force)
                                 
-                                print('t',obj_dist_vec, cart2pol(-1*obj_dist_vec[0],obj_dist_vec[1]), obj_dist_pol)
+                                #print('t',obj_dist_vec, cart2pol(-1*obj_dist_vec[0],obj_dist_vec[1]), obj_dist_pol)
                                 next_pos_pol = cart2pol(-1*next_pos[0], next_pos[1])
-                                print('next pos ',obj_dist_pol,next_pos_pol)
                                 #print(t)
                                 #if will cross radius
                                 if (next_pos_pol[1] >= vert_point[0][1] >= obj_dist_pol[1]) or (obj_dist_pol[1] >= vert_point[0][1] >= next_pos_pol[1]):
@@ -518,9 +544,56 @@ class game:
                                         orth_vec = np.array([-1*new_point_line[1],-1*new_point_line[0]])
                                     normal_force += -1.0*vec_comp(obj.force, orth_vec)*(orth_vec/absval(orth_vec))
 
+                
                     #print('teststssss4-------------------', normal_force,obj.force,obj.m_speed)
                     obj.force += obj.vel
-                    obj.force += normal_force         
+                    obj.force += normal_force 
+            #water contact 
+            print('WATER CONTACT TEST ')
+            self.water_contact(planet, obj, obj_dist, obj_dist_vec, obj_dist_pol)
+            
+            #water movement 
+            if obj.water_contact_flag == 1:
+                print(obj.m_speed)
+                if obj.move_flag == 1:
+                    obj.force += 0.4*obj.m_speed*(self.orth_vec(obj.down))
+                else:
+                    obj.m_speed = 0.5*obj.m_speed
+                    obj.force += 0.4*obj.m_speed*(self.orth_vec(obj.down))
+                    # if obj.move_flag == 1:
+                    #     print(t)
+                        
+    def water_contact(self, planet, obj, obj_dist, obj_dist_vec, obj_dist_pol):
+        #rad_list = []
+        #water_intersect_point_list = []
+        for water_obj in planet.water_obj_list:
+            #if in range of water
+            if 2*np.pi - (water_obj.arc_start  + water_obj.arc) <= obj_dist_pol[1] < 2*np.pi - (water_obj.arc_start):
+                #go througfh points 
+                #print(obj_dist_pol[1])
+                for water_ind, water_point in enumerate(water_obj.rel_points):
+                    #print('water point ', water_point)
+                    if water_ind < len(water_obj.rel_points) - 1:
+                        next_water_point = water_obj.rel_points[water_ind + 1]
+                        #get the corresponding radius at point 
+                        diff_rad = next_water_point[0] - water_point[0]
+                        diff_phi = next_water_point[1] - water_point[1]
+                        #print('diff rad ',diff_rad,next_water_point[0], water_point[0])
+                        min_rad = min([next_water_point[0], water_point[0]])
+                        min_phi = min([2*np.pi - next_water_point[1], 2*np.pi - water_point[1]])
+                        max_phi = max([2*np.pi - next_water_point[1], 2*np.pi - water_point[1]])
+                        print('water range ',min_phi, obj_dist_pol[1] ,max_phi)
+                        #print(t)
+                        if min_phi < obj_dist_pol[1] < max_phi:
+                            rad_val = ((obj_dist_pol[1] - min_phi)/diff_phi)*diff_rad + min_rad
+                            #print('test ',(obj_dist_pol[1] - min_phi)/diff_phi,obj_dist_pol[1] ,((obj_dist_pol[1] - min_phi)/diff_phi)*diff_rad,min_rad)
+                            print('rad val ',rad_val, obj_dist_pol[0])
+                            #print(t)
+                            if obj_dist_pol[0] < rad_val:
+                                obj.force += (-1.5)*obj.g_force
+                                #obj.vel = np.zeros(2)
+                                obj.water_contact_flag = 1
+                                #print(t)
 
     def step(self):
         for obj in self.object_list:
@@ -534,12 +607,12 @@ class game:
             
             #reset contact flag 
             obj.contact_flag = 0 
+            obj.water_contact_flag = 0
             
             #apply gravity depending on room or not 
             if self.player.inside_flag == 0:
                 if self.player.prev_inside_flag == 1:
                     self.player.prev_inside_flag = 0
-                    print('2window scale val ',self.prev_window_scale_val)
                     self.window_scale_val = self.prev_window_scale_val
                     self.room_obj = None
                     #print(t)
@@ -554,10 +627,7 @@ class game:
                     room = self.sector_room_list[self.player.inside_room]
                     self.room_obj = self.load_room(room, self.player.contact_flag_obj)
                     self.prev_window_scale_val = np.float(self.window_scale_val + 0.01)
-                    print('1window scale val ',self.prev_window_scale_val)
                     self.window_scale_val = max([self.window_scale_val,self.room_scale_val])
-                    print('1window scale val ',self.prev_window_scale_val)
-                print('window scale val ',self.prev_window_scale_val)
                 obj_dist_vec = self.room_obj.pos - obj.pos
                 obj_dist = absval(obj_dist_vec)
                 if obj_dist <= self.room_obj.g_max_rad:
@@ -582,26 +652,38 @@ class game:
                 self.planet_contact(self.room_obj, obj)
             
             if obj.contact_flag == 0 or (obj.move_keys[2]==0 and obj.prev_move_keys[2] == 1):
+                if obj.water_contact_flag == 1:
+                    water_mod = 0.2
+                else:
+                    water_mod = 1.0
                 print(obj.contact_flag,obj.move_keys,obj.prev_move_keys)
-                obj.vel += obj.g_force
+                obj.vel += water_mod*obj.g_force
                 obj.force += obj.vel
                 if (obj.move_keys[2]==0 and obj.prev_move_keys[2] == 1):
-                    print('222222222',obj.vel, obj.g_force, obj.down, 1,obj.vel/obj.down,1, obj.m_force)
-                    print(obj.TEST_move_flags_list)
+                    #print('222222222',obj.vel, obj.g_force, obj.down, 1,obj.vel/obj.down,1, obj.m_force)
+                    #print(obj.TEST_move_flags_list)
                     print(obj.contact_flag)
-                    #print(t)
+                    
+            #slow vel if in water 
+            if obj.water_contact_flag == 1:
+                obj.vel = (1-0.7)*obj.vel  
                     
         # #update object speed -------
       
         #update object position 
         for obj in self.object_list:
             #get the move force
-            if obj.contact_flag == 0:
+            if obj.contact_flag == 0 and obj.water_contact_flag == 0:
                 obj.m_force = obj.m_speed*(self.orth_vec(obj.down))
                 obj.force += obj.m_force
             #obj.move_force()
             obj.action_fn()
             #update the position 
+            print('ttttttttttttttttttttttttttttttttttttttyyyyyy11',obj.force, obj.m_force, obj.m_speed, obj.down, obj.g_force, obj.vel)
+            if obj.water_contact_flag == 1:
+                print('ttttttttttttttttttttttttttttttttttttttyyyyyy',obj.force, obj.m_force, obj.m_speed, obj.down, obj.g_force, obj.vel)
+            # else:
+            #     print(t)
             obj.pos += obj.force 
             #update prev move keys 
             obj.prev_move_keys = obj.move_keys.copy()
@@ -648,3 +730,9 @@ class game:
                     fire_obj = obj_moveable(pol2cart(planet_obj.rel_pos[0],planet_obj.rel_pos[1]) + planet.pos, 20*planet_obj.dir, 0.1, [np.array([0.0,0.1])])
                     self.object_list.append(fire_obj)
                     planet_obj.state = 0
+
+            #update water object 
+            for water_obj in planet.water_obj_list:
+                print([planet2.vel for planet2 in self.planet_list if planet2 != planet])
+                #print(t)
+                water_obj.water_step([planet2 for planet2 in self.planet_list if planet2 != planet])
