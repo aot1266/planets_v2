@@ -1,6 +1,6 @@
 import pygame as pg
 import numpy as np
-from Game import game 
+from Game_v1_1 import game 
 from moveable_objs import player
 
 #control game -------------------------------------------
@@ -8,11 +8,12 @@ pg.init()
 #define the screen 
 screen = pg.display.set_mode((800,600))#control game -------------------------------------------
 pg.init()
-#define the screen 
-screen = pg.display.set_mode((800,600))
 
 player_main = player(np.array([0.0,0.0]), np.array([0.0,0.0]), 2.0, [np.array([0.0,0.1])], [], [1,1,1])
-game_main = game(player_main, "input_data.json", "stars_data.json", screen)
+#game_main = game(player_main, "input_data_7_2.json", "stars_data.json", screen)
+game_main = game(player_main, "input_data_demo.json", "stars_data.json", screen)
+#game_main.water_surface = pg.Surface((800,600))
+#game_main.water_surface.set_alpha(0.2)
 
 # Run until the user asks to quit
 running = True
@@ -28,7 +29,7 @@ while running:
 
     #player movement and actions
     keys = pg.key.get_pressed()
-    if game_main.player.contact_flag == 1:
+    if game_main.player.contact_flag == 1 or game_main.player.water_contact_flag == 1:
         events = pg.event.get()
         if keys[pg.K_LEFT]: # We can check if a key is pressed like this
             game_main.player.move_keys[0] = 1
@@ -48,7 +49,7 @@ while running:
         else:   
             game_main.player.action_keys[1] = 0
     else:
-        game_main.player.move_keys = [0,0,0]
+        game_main.player.move_keys = [0,0,0,0]
 
     #general action 
     if keys[pg.K_q]:
