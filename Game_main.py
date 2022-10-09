@@ -1,6 +1,6 @@
 import pygame as pg
 import numpy as np
-from Game_v1_1 import game 
+from Game_core_v1 import game 
 from moveable_objs import player
 
 #control game -------------------------------------------
@@ -25,7 +25,7 @@ while running:
             running = False
 
     # Fill the background with white
-    game_main.screen.fill((255, 255, 255))
+    game_main.screen.fill((0, 0, 0))
 
     #player movement and actions
     keys = pg.key.get_pressed()
@@ -68,11 +68,20 @@ while running:
         game_main.window_scale_val -= 0.01
     if keys[pg.K_x]:
         game_main.window_scale_val += 0.01
-        
+    #action for aiming
+    if keys[pg.K_a]:
+        game_main.player.aim_keys[0] = 1
+    if keys[pg.K_d]:
+        game_main.player.aim_keys[1] = 1   
+    if keys[pg.K_s]:
+        game_main.player.aim_keys[2] = 1   
+    if keys[pg.K_f]:
+        game_main.player.aim_keys[2] = -1   
+                
     #main game step 
     game_main.load_step()
-    for planet in game_main.planet_list:
-        print(planet.pos, type(planet.pos))
+    # for planet in game_main.planet_list:
+    #     print(planet.pos, type(planet.pos))
     game_main.step()
     game_main.screen_step()
     # Flip the display

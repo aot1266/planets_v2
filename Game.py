@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 import pygame as pg
 import random as rn 
-from core_fns import absval, cart2pol, pol2cart, vec_comp, orth_vec, line_intersection, intersection
+from core_fns import absval, cart2pol, pol2cart, vec_comp, orth_vec, line_intersection, intersection, angle_between
 from planet_objs import obj_planet, on_planet_obj
 from moveable_objs import obj_moveable, NPC, player
 
@@ -51,6 +51,8 @@ class game:
         #load lists 
         self.planet_list = []
         self.object_list = [player_object]
+        #room details 
+        self.room_geom = None
         #self.stars_list = []
         self.player = player_object
         try:
@@ -89,7 +91,20 @@ class game:
             else:
                 self.load_sector(self.current_sector + [-1,0]) 
         elif self.sector_pos_rem[1] < 0.1:
-            self.load_sector(self.current_sector + [0,-1])             
+            self.load_sector(self.current_sector + [0,-1])
+
+    def load_room(room):
+        #get geom 
+        geom = []
+        for g_point in room['geom']:
+            geom.append([g_point['p1'],g_point['p2'],g_point['type'],g_point['mu']])
+        #planet objects
+        room_obj_list = []
+        for room_obj in room['planet_obj_list']:
+            #create object 
+            room_obj_list.append(on_planet_obj(room_obj['cart_pos'], room_obj['height'], room_obj['state'], room_obj['obj_type']))
+        room_planet_obj = obj_planet(np.array(room['pos']), np.array(room['vel']), room['mass'], geom, room_obj_list, room['planet_linked_list'], room['grav_flag'])
+        return room_planet_obj
 
     def load_sector(self, coords): 
         if list(coords) not in self.sector_load_list:
@@ -130,6 +145,10 @@ class game:
                 #    self.stars_list[stars_ind].append(stars)
             except:
                 pass
+            print(self.planet_list)
+            for planet in new_planet_list:
+                print(planet, '------',planet.planet_linked_list)
+            #print(t)
 
     def unload_step(self):
         unload_list = []
@@ -270,6 +289,10 @@ class game:
             obj.m_force = np.zeros(2)
             obj.g_force = np.zeros(2)
             obj.n_force = np.zeros(2) 
+            
+            #get the move force
+            obj.move_force()
+            
             #reset contact flag 
             obj.contact_flag = 0 
             
@@ -350,7 +373,9 @@ class game:
                         if other_rad_list != []:
                             other_rad = max(other_rad_list)
                             print('other rad ',other_rad)
+                            print('ccccccccccc ',abs(obj_dist_pol[0]), abs(other_rad), other_rad, min_rad)
                             if abs(obj_dist_pol[0]) >= abs(other_rad) and other_rad != min_rad:
+                                print('max rad ----------------------',max_rad,rad)
                                 rad = max_rad
                             else:
                                 rad = min_rad
@@ -366,12 +391,13 @@ class game:
                             self.intersect_point = intersect_point
                         
                         #if radius of point smaller than the surface radius
-                        if abs(rad) >= abs(obj_dist_pol[0]):                  
+                        if (abs(rad) >= abs(obj_dist_pol[0]) 
+                        or abs(rad) >= abs(cart2pol(-1*(obj_dist_vec - obj.g_force)[0], (obj_dist_vec - obj.g_force)[1])[0])):                  
                             obj.contact_flag = 1
                             obj.contact_flag_obj = planet
                             
                             #if radius significantly smaller adjust 
-                            if 0.96*abs(rad) > abs(obj_dist_pol[0]) and point not in vert_point_list:
+                            if 0.99*abs(rad) > abs(obj_dist_pol[0]) and point not in vert_point_list:
                                 #this if statement may need removing and fn retaining
                                 #if point[2] == 'line' or rad == min([other_point[0] for other_point in point_list if other_point[2] != 'line']):
                                 obj.pos -= obj_dist_vec*((rad - obj_dist_pol[0])/rad)
@@ -404,10 +430,12 @@ class game:
                                 normal_force += vec_comp(planet.force, obj_dist_vec/absval(obj_dist_vec))*(obj_dist_vec/absval(obj_dist_vec))
                                 
                                 #get the velocity normal component 
-                                if obj.move_keys[2] != 1:
+                                if ((obj.move_keys[2] == 0 and obj.prev_move_keys[2] == 0) 
+                                or (obj.move_keys[2] == 1)):
                                     vel_comp = vec_comp(obj.vel, obj.down/absval(obj.down))*(obj.down/absval(obj.down))
                                     obj.vel += -1*vel_comp
-                                    obj.vel = (1-2*point[3])*obj.vel   
+                                    obj.vel = (1-2*point[3])*obj.vel  
+
                                 if absval(obj.vel) < 0.04:
                                     obj.vel = np.zeros(2)
                                     
@@ -442,43 +470,40 @@ class game:
                                 print('orth vec ',orth_vec)
                                 print('normal 1',-1*vec_comp(obj.force, orth_vec)*(orth_vec/absval(orth_vec)))
                                 print('contact flag ',obj.contact_flag_obj, self.planet_list.index(obj.contact_flag_obj))
-                                #print(t)
+                                print('mu ',point[3],' delta rad ', abs(point[1][0] - point[0][0]), ' delta angle ', point[1][1] - point[0][1])
+                                print('mu val mod ',abs(point[1][0] - point[0][0])*(point[1][1] - point[0][1])/np.pi, 2*(point[1][1] - point[0][1])/np.pi, point[3]*2*(point[1][1] - point[0][1])/np.pi, point[3]+2*(point[1][1] - point[0][1])/np.pi, (point[3]+2*(point[1][1] - point[0][1])/np.pi)**2)
+                                print('angle between ', np.degrees(angle_between(orth_vec,-1*obj_dist_vec))%180)
                                 self.screen_step()
                                 pg.display.flip()
                                                                       
-                                if np.sign(obj.force[0]) == np.sign(obj_dist_vec[0]) or np.sign(obj.force[1]) == np.sign(obj_dist_vec[1]):
-                                    normal_force += -1*vec_comp(obj.force, orth_vec)*(orth_vec/absval(orth_vec))
+                                # if np.sign(obj.force[0]) == np.sign(obj_dist_vec[0]) or np.sign(obj.force[1]) == np.sign(obj_dist_vec[1]):
+                                #     normal_force += -1*vec_comp(obj.force, orth_vec)*(orth_vec/absval(orth_vec))
+                                delta_angle = 4*(point[1][1] - point[0][1])/np.pi
+                                if delta_angle <= 0.05:
+                                    normal_mod = 0.0
+                                elif point[3] > 0.75:
+                                    normal_mod = min([4*delta_angle,1])
+                                else:
+                                    normal_mod = min([3*delta_angle*(point[3] + 0.25), 1])
+                                print('normsl mod ---',3*delta_angle*(point[3] + 0.25), normal_mod, delta_angle)
+                                print(vec_comp(obj.force, orth_vec)*(orth_vec/absval(orth_vec)))
+                                print('down ',orth_vec, vec_comp(obj.force, obj_dist_vec/absval(obj_dist_vec))*(obj_dist_vec/absval(obj_dist_vec)))
+                                #test for different 
+                                if np.sign(obj.force[0]) == np.sign(obj_dist_vec[0]) or np.sign(obj.force[1]) == np.sign(obj_dist_vec[1]):  
+                                    normal_force += -(1.0 - normal_mod)*vec_comp(obj.force, orth_vec)*(orth_vec/absval(orth_vec)) -normal_mod*vec_comp(obj.force, obj_dist_vec/absval(obj_dist_vec))*(obj_dist_vec/absval(obj_dist_vec))
+                                #print(t)
                                 #add planet speed component
-                                normal_force += vec_comp(planet.force, orth_vec)*(orth_vec/absval(orth_vec))
-
+                                #normal_force += vec_comp(planet.force, obj_dist_vec/absval(obj_dist_vec))*(obj_dist_vec/absval(obj_dist_vec))
+                                normal_force += vec_comp(planet.force, orth_vec)*(orth_vec/absval(orth_vec)) 
+                                
                                 #get the velocity normal component 
-                                if obj.move_keys[2] != 1:                                    
+                                if ((obj.move_keys[2] == 0 and obj.prev_move_keys[2] == 0) 
+                                or (obj.move_keys[2] == 1)):                                   
                                     obj.vel -= vec_comp(obj.vel, orth_vec)*(orth_vec/absval(orth_vec))
                                     #vel_comp = vec_comp(obj.vel, obj.down/absval(obj.down))*(obj.down/absval(obj.down))
                                     #obj.vel += -1*vel_comp
                                     obj.vel = (1-2*point[3])*obj.vel  
-                                #handle non moving sliding on line
-                                if (obj.move_keys[0] != 1 and obj.move_keys[1] != 1) and obj.move_keys[2] != 1:     
-                                    print(obj.move_keys)
-                                    # print(t)
-                                    print('obj vel ',obj.vel, obj.down, self.orth_vec(obj.down))
-                                    # total_force = normal_force + obj.vel + obj.force
-                                    
-                                    normal_comp_mag = vec_comp(normal_force, new_point_line/absval(new_point_line))
-                                    normal_comp = normal_comp_mag*(new_point_line/absval(new_point_line))
-                                    print('normal_comp_mag ',normal_comp_mag )
-                                    print('normal force',normal_force, obj.down)
-                                    
-                                    normal_comp_mag = vec_comp(obj.g_force, self.orth_vec(obj.down))
-                                    normal_comp = normal_comp_mag*(self.orth_vec(obj.down))
-                                    print('normal_comp_mag 2',normal_comp_mag )
-                                    print('normal force 2 ',normal_force, obj.down)
-                                    # if point[3] > 0.8 or abs(normal_comp_mag) >= 0.75:
-                                    #     obj.force -= normal_comp  
-                                    # elif 0.3 < abs(normal_comp_mag) <= 0.99:
-                                    #     print('t1 ',normal_comp*(1-point[3]))
-                                    #     obj.force -= normal_comp*(1-point[3])#*(1-abs(normal_comp_mag))
-
+      
                                 if absval(obj.vel) < 0.04:
                                     obj.vel = np.zeros(2)
                             
@@ -505,9 +530,8 @@ class game:
                                                 orth_vec = np.array([-1*new_point_line[1],-1*new_point_line[0]])
                                             else:    
                                                 orth_vec = np.array([-1*new_point_line[1],-1*new_point_line[0]])
-                                            normal_force += -1*vec_comp(obj.force, orth_vec)*(orth_vec/absval(orth_vec))
-                                            print('tt',-1*vec_comp(obj.force, orth_vec)*(orth_vec/absval(orth_vec)))
-                                            #print(t)
+                                            normal_force += -1.0*vec_comp(obj.force, orth_vec)*(orth_vec/absval(orth_vec))
+
                             #print('teststssss4-------------------', normal_force,obj.force,obj.m_speed)
                             obj.force += obj.vel
                             obj.force += normal_force
@@ -521,11 +545,14 @@ class game:
                     print('force 11111---', obj.m_force, obj.m_speed*(self.orth_vec(obj.down)))
                     #obj.force += obj.m_speed*(self.orth_vec(obj.down))                
             
-            if obj.contact_flag == 0 or obj.move_keys[2]==1:
+            if obj.contact_flag == 0 or (obj.move_keys[2]==0 and obj.prev_move_keys[2] == 1):
+                print(obj.contact_flag,obj.move_keys,obj.prev_move_keys)
                 obj.vel += obj.g_force
-                obj.force+=obj.vel
-                if obj.move_keys[2]==1:
+                obj.force += obj.vel
+                if (obj.move_keys[2]==0 and obj.prev_move_keys[2] == 1):
                     print('222222222',obj.vel, obj.g_force, obj.down, 1,obj.vel/obj.down,1, obj.m_force)
+                    print(obj.TEST_move_flags_list)
+                    print(obj.contact_flag)
                     #print(t)
             else:
                 print(1)
@@ -535,10 +562,20 @@ class game:
         #update object position 
         for obj in self.object_list:
             #get the move force
-            obj.move_force()
+            if obj.contact_flag == 0:
+                obj.m_force = obj.m_speed*(self.orth_vec(obj.down))
+                obj.force += obj.m_force
+            #obj.move_force()
             obj.action_fn()
             #update the position 
             obj.pos += obj.force 
+            #update prev move keys 
+            obj.prev_move_keys = obj.move_keys.copy()
+            
+        #update player inside
+        if self.player.inside_flag == 1:
+            #load in planet 
+            room_obj = self.player.inside_room
         
         #update the planet list
         for planet in self.planet_list:
@@ -555,7 +592,12 @@ class game:
                     if (p_rad + p2_rad) >= abs_planet_dist:
                         #if not attacking then bounce off
                         if planet.attack_flag == 0:
-                            planet.force += -1*(planet.mass/(planet.mass + planet_2.mass))*vec_comp(planet_rel_speed, planet_dist_vec)*(planet_dist_vec/absval(planet_dist_vec))
+                            print('tttttttttttttttttttttttttttttttttttttttt')
+                            print(planet.mass)
+                            print((planet.mass + planet_2.mass))
+                            if planet.mass + planet_2.mass != 0.0:
+                                planet.force += -1*(planet.mass/(planet.mass + planet_2.mass))*vec_comp(planet_rel_speed, planet_dist_vec)*(planet_dist_vec/absval(planet_dist_vec))
+                                print(-1*(planet.mass/(planet.mass + planet_2.mass))*vec_comp(planet_rel_speed, planet_dist_vec)*(planet_dist_vec/absval(planet_dist_vec)))                       
                         #if attacking then add damage and reduce elatsicity 
                         else:
                             planet.force += -1*(0.2)*(planet.mass/(planet.mass + planet_2.mass))*vec_comp(planet_rel_speed, planet_dist_vec)*(planet_dist_vec/absval(planet_dist_vec))

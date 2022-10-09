@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import copy as cp
 from core_fns import absval, cart2pol, pol2cart, vec_comp, orth_vec, line_intersection, intersection, orth_vec
 
 #obj class
@@ -24,7 +25,6 @@ class obj_moveable:
         self.speed_step = self.max_speed/3
         #down front vectors
         self.down = np.array([0.0,1.0])
-        print('down ', self.down)
         #contact flag
         self.contact_flag = 0
         self.contact_flag_obj = None
@@ -37,6 +37,7 @@ class obj_moveable:
         self.prev_move_keys = [0,0,0,0]
         #action keys: action, dive, 
         self.action_keys = [0,0,0,0]
+        self.aim_keys = [0,0,0]
         #------------------intersect_point 
         self.intersect_point = np.zeros(2)
         #attacking/projectile flag 
@@ -64,19 +65,10 @@ class obj_moveable:
                 self.jump_force += 0.01
             #self.vel = -10*self.down + 1.5*self.m_speed*(orth_vec(self.down))
         if self.prev_move_keys[2] == 1 and self.move_keys[2] == 0:
-            print('standard jump ',absval(-10*self.down + 1.5*self.m_speed*(orth_vec(self.down))), 1.5*self.m_speed)
-            print('jump force ',self.jump_force)
             self.vel = -1*self.jump_force*self.down# + self.m_speed*(orth_vec(self.down)) 
-            #print(t)
-        #     #self.force += -25*self.down 
-        #     print(121212,self.vel)
-        #     self.vel = -10*self.down + 1.5*self.m_speed*(orth_vec(self.down))
-        #     #self.vel = -self.jump_force*self.down
-        #     print('22222', self.vel, self.down)
-        #     #print(t)
             self.jump_force = 0.0
         #water dive force
-        print('move keys ',self.move_keys)
+        #print('move keys ',self.move_keys)
         if self.water_contact_flag == 1:
             if self.action_keys[2] == -1 and self.move_keys[2] == 1:
                 self.vel = 0.5*self.jump_force*self.down
@@ -85,9 +77,13 @@ class obj_moveable:
         #if len(self.TEST_move_flags_list)>32:
         #    self.TEST_move_flags_list = self.TEST_move_flags_list[-30]
         #self.prev_move_keys =self.move_keys.copy()
-            
-    def action_fn(self):
-        print(1)
+
+    def NPC_step(self):
+        #run npc loop in here 
+        pass
+          
+    def action_fn(self, planet_list):
+        pass
     #     if self.action_keys[1] == 1:
     #         self.contact_flag_obj.force += 0.1*self.down
             
@@ -128,20 +124,22 @@ class NPC(obj_moveable):
         self.close_planet_obs_list_2 = []
         
         self.inside_flag = 0
+        self.outside_pos = None
         self.indide_room = None
         self.prev_inside_flag = 0
         
-    def action_fn(self):
+        self.action_state = 0
+        
+    def action_fn(self, planet_list):
         if self.action_keys[1] == 1:
             self.contact_flag_obj.force += 0.1*self.down
             #add force to linked planets
             for other_planet in self.contact_flag_obj.planet_linked_list:
-                print(other_planet)
                 other_planet.force += 0.1*self.down
-                print(other_planet.force)
             
         #general action   
         if self.action_keys[0] == 1 and self.prev_action_keys[0] != 1:
+            print('q')
             #get distance from planet 
             rel_dist = self.pos - self.contact_flag_obj.pos
             rel_pol_dist = cart2pol(rel_dist[0],rel_dist[1])
@@ -150,17 +148,39 @@ class NPC(obj_moveable):
             if self.inside_flag == 1:
                 self.inside_room = None
                 self.inside_flag = 0
+                self.pos = cp.deepcopy(self.outside_pos)
                 self.prev_inside_flag = 1
+                #reset inside flags 
+                for planet_obj in self.contact_flag_obj.planet_obj_list:
+                    planet_obj.state = 0
                 
             #get the action
             for planet_obj in self.contact_flag_obj.planet_obj_list:
                 #get if close to object 
                 if (-0.1*np.pi + planet_obj.rel_pos[1] <= rel_pol_dist[1] <= 0.1*np.pi + planet_obj.rel_pos[1] 
                 and rel_pol_dist[0] >= 0.8*planet_obj.rel_pos[0] and rel_pol_dist[0] <= planet_obj.rel_pos[0] + planet_obj.height):                 
-                    #cannon load and fire
-                    if planet_obj.obj_type == 'cannon': 
+                    
+                    #anchor aim 
+                    if planet_obj.obj_type == 'anchor':
+                        #enter aiming state
                         if planet_obj.state == 0:
-                            print('inventory ',self.inventory)
+                            self.action_state = 1
+                            planet_obj.state = 1
+                        #fire 
+                        if planet_obj.state == 1:                                                       
+                            if self.aim_keys[2] == 1: 
+                                planet_obj.state = 2
+                                planet_obj.anchor_fire(planet_list)
+                        #recall                       
+                        if planet_obj.state >= 1:
+                            if self.aim_keys[2] == -1:
+                                planet_obj.state = 1
+                                planet_obj.anchor_reset()
+                            
+                    #cannon load and fire
+                    elif planet_obj.obj_type == 'cannon': 
+                        if planet_obj.state == 0:
+                            #print('inventory ',self.inventory)
                             #will need to rework to change what 
                             if self.inventory != []:
                                 self.inventory.pop(0)
@@ -168,22 +188,55 @@ class NPC(obj_moveable):
                         elif planet_obj.state == 1 and self.prev_action_keys[0] == 0: 
                             #signals to fire in main loop 
                             planet_obj.state = 2  
+                    #ladder 
                     elif planet_obj.obj_type == 'ladder':
                         if planet_obj not in self.close_planet_obs_list:
                             self.close_planet_obs_list.append(planet_obj)
+                            
                     #room handling
                     elif planet_obj.obj_type == 'room':
-                        planet_obj.state += 1 
-                        planet_obj.state = planet_obj.state % 2
+                        planet_obj.state = 1 
+                        #planet_obj.state = planet_obj.state % 2
                         self.inside_flag = planet_obj.state
+                        if self.inside_flag == 1 and self.prev_inside_flag == 0:
+                            self.outside_pos = self.pos.copy()
+                        print('inside flag A ',self.inside_flag)
                         if planet_obj.state == 1:
                             self.inside_room = planet_obj.room_index
                         else:
-                            self.inside_room = None
+                            self.inside_room = None 
                     else:  
                         planet_obj.state = 1
                         print('state', planet_obj.state) 
         
+        #aim anchor 
+        if self.aim_keys[0] == 1 or self.aim_keys[1] == 1 or self.aim_keys[2] == 1 or self.aim_keys[2] == -1:
+            for planet_obj in self.contact_flag_obj.planet_obj_list:
+                #get distance from planet 
+                rel_dist = self.pos - self.contact_flag_obj.pos
+                rel_pol_dist = cart2pol(rel_dist[0],rel_dist[1])
+                
+                if planet_obj.obj_type == 'anchor':
+                    #enter aiming state
+                    if planet_obj.state == 1:
+                        #get if close to object 
+                        if (-0.1*np.pi + planet_obj.rel_pos[1] <= rel_pol_dist[1] <= 0.1*np.pi + planet_obj.rel_pos[1] 
+                        and rel_pol_dist[0] >= 0.8*planet_obj.rel_pos[0] and rel_pol_dist[0] <= planet_obj.rel_pos[0] + planet_obj.height):                 
+                            if self.aim_keys[0] == 1:
+                                planet_obj.aim_angle += -1*planet_obj.aim_step
+                            if self.aim_keys[1] == 1:
+                                planet_obj.aim_angle += planet_obj.aim_step                                                        
+                            if self.aim_keys[2] == 1: 
+                                planet_obj.state = 2
+                    if self.aim_keys[2] == -1:
+                        planet_obj.state = 1
+                        planet_obj.anchor_reset()
+        #anchor fire
+        for planet_obj in self.contact_flag_obj.planet_obj_list:        
+            if planet_obj.obj_type == 'anchor':
+                if planet_obj.state == 2:
+                    planet_obj.anchor_fire(self.contact_flag_obj, planet_list)                           
+            
         #climb option
         if self.action_keys[2] == 1:
             #get distance from planet 
@@ -197,8 +250,11 @@ class NPC(obj_moveable):
                         if planet_obj not in self.close_planet_obs_list:
                             self.close_planet_obs_list.append([planet_obj,self.contact_flag_obj])       
                             self.close_planet_obs_list_2.append(self.contact_flag_obj)
-            
+        
+        #print('111111----- ',self.close_planet_obs_list)
         for planet_obj_entry in self.close_planet_obs_list:
+            #print('pp ',planet_obj_entry)
+            #print(t)
             planet_obj = planet_obj_entry[0]
             planet = planet_obj_entry[1]
             if self.action_keys[2] == 1:
@@ -211,28 +267,35 @@ class NPC(obj_moveable):
                 and rel_pol_dist[0] >= 0.8*planet_obj.rel_pos[0] and rel_pol_dist[0] <= planet_obj.rel_pos[0] + planet_obj.height):                 
                 #     print(self.force, self.force + self.m_force, self.m_force)
                 #     print('force 2', self.force/absval(self.force), self.m_force/absval(self.m_force), self.down)
-                     if self.action_keys[2] == 1:    
+                    if self.action_keys[2] == 1:    
                          self.force = np.zeros(2)
                          self.force += planet.force
                          self.force += self.down*(-1.2) 
                          self.force += self.m_force
                          self.vel = np.zeros(2)
                          self.contact_flag = 1 
-                     elif self.action_keys[2] == -1: 
+                    elif self.action_keys[2] == -1: 
                          self.force = np.zeros(2)
                          self.force += planet.force
                          self.force += self.down*(1.2) 
                          self.vel = np.zeros(2)
                          self.contact_flag = 1
-                     elif rel_pol_dist[0] >= planet_obj.rel_pos[0] + 0.1:
+                    elif rel_pol_dist[0] >= planet_obj.rel_pos[0] + 0.1:
                          self.force = np.zeros(2)
                          self.force += planet.force
                          self.force += self.m_force
                          self.vel = np.zeros(2)
                          self.contact_flag = 1
+                    if self.move_keys[1] == 0 and self.move_keys[0] == 0:
+                        self.m_speed = 0.0
                         
         #update prev action keys
-        self.prev_action_keys = self.action_keys.copy()            
+        self.prev_action_keys = self.action_keys.copy()     
+        #reset aim keys 
+        self.aim_keys = [0,0,0]
+        
+    def npc_step(self): 
+        pass
 
 #player class 
 class player(NPC):
@@ -240,4 +303,7 @@ class player(NPC):
         super().__init__(pos, vel, mass, geom, state, inventory)
         self.inventory = inventory
         #move_keys        
-        print('move keys 1',self.move_keys)
+        #print('move keys 1',self.move_keys)
+      
+    def action_fn(self, planet_list):
+        super().action_fn(planet_list)
