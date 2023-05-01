@@ -28,6 +28,12 @@ def vec_comp(v1, v2):
 def orth_vec(v):
     return np.array([v[1],-1*v[0]])
 
+#get angles
+def angle_between(p1, p2):
+    ang1 = np.arctan2(*p1[::-1])
+    ang2 = np.arctan2(*p2[::-1])
+    return (ang1 - ang2) % (2 * np.pi)
+
 #get line intersection 
 def line_intersection(line1, line2):
     xdiff = (line1[0][0] - line1[1][0], line2[0][0] - line2[1][0])
